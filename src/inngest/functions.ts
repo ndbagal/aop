@@ -1,27 +1,47 @@
-import prisma from "@/lib/db";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { inngest } from "./client";
+import { generateText } from "ai";
 
-export const helloWorld = inngest.createFunction(
-  { id: "hello-world" },
-  { event: "test/hello.world" },
+const google = createGoogleGenerativeAI();
+const openai = createOpenAI();
+const anthropic = createAnthropic();
+
+export const execute = inngest.createFunction(
+  { id: "execute-ai" },
+  { event: "execute/ai" },
   async ({ event, step }) => {
-    // Fetch the video
-    await step.sleep("fetching-video", "5s");
+    const { steps: geminiSteps } = await step.ai.wrap(
+      "gemini-generate-text",
+      generateText,
+      {
+        system: "You are a helpful assistant.",
+        model: google("gemini-2.5-flash"),
+        prompt: "What is 2 + 2?",
+      },
+    );
 
-    // Transcribe the video
-    await step.sleep("transcribing-video", "5s");
+    const { steps: openaiSteps } = await step.ai.wrap(
+      "openai-generate-text",
+      generateText,
+      {
+        model: openai("gpt-4.1-mini"),
+        system: "You are a helpful assistant.",
+        prompt: "What is 2 + 2?",
+      },
+    );
 
-    // Send the transcription to LLM
-    await step.sleep("sending-to-llm", "5s");
+    const { steps: anthropicSteps } = await step.ai.wrap(
+      "anthropic-generate-text",
+      generateText,
+      {
+        model: anthropic("claude-2"),
+        system: "You are a helpful assistant.",
+        prompt: "What is 2 + 2?",
+      },
+    );
 
-    await step.run("create-workflow", async () => {
-      return prisma.workflow.create({
-        data: {
-          name: "New Workflow from ingest",
-        },
-      });
-    });
-
-    return { message: `Hello ${event.data.email}!` };
+    return { geminiSteps, openaiSteps, anthropicSteps };
   },
 );
